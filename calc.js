@@ -129,6 +129,13 @@ function dayTargets(S, k){
   return {...t, kcal:Math.round((t.kcal+d)/10)*10, carb:Math.max(0, Math.round(t.carb + d/4))}
 }
 
+// ~35ml per kg, rounded to a glass
+function waterGoal(S){
+  if (+S.settings.waterGoal > 0) return +S.settings.waterGoal
+  const w = +S.profile.weight || 75
+  return Math.round(w*35/250)*250
+}
+
 // ---------- rings for a day ----------
 function ringsFor(S, D, k){
   const t = dayTargets(S,k), st = S.settings, day = D.day[k] || {}
@@ -136,12 +143,14 @@ function ringsFor(S, D, k){
   const rest = st.rest.includes(dow(k)) && !(day.sets > 0)
   const steps = (S.activity[k] || {}).steps || 0
   const cmins = day.cardio || 0
+  const ml = (S.water||{})[k] || 0, wg = waterGoal(S)
   const calV = t.kcal ? kcal/t.kcal : 0
   return {
     cal:{v:calV, closed:calV >= .9 && calV <= 1.1, over:calV > 1.1, now:kcal, goal:t.kcal},
     pro:{v:t.prot ? prot/t.prot : 0, closed:t.prot > 0 && prot >= t.prot*.97, now:prot, goal:t.prot},
     str:{v:rest ? 1 : (day.sets||0)/st.setGoal, closed:rest || (day.sets||0) >= st.setGoal, rest, now:day.sets||0, goal:st.setGoal},
-    car:{v:Math.max(steps/st.stepGoal, cmins/st.cardioGoal), closed:steps >= st.stepGoal || cmins >= st.cardioGoal, steps, cmins}
+    car:{v:Math.max(steps/st.stepGoal, cmins/st.cardioGoal), closed:steps >= st.stepGoal || cmins >= st.cardioGoal, steps, cmins},
+    wat:{v:ml/wg, closed:ml >= wg, now:ml, goal:wg}
   }
 }
 
@@ -194,7 +203,10 @@ function derive(S){
       if (R.str.closed && !R.str.rest) xp += 40
       if (R.car.closed) xp += 25
       if (S.weights[k]) xp += 15
-      if (logged && R.cal.closed && R.pro.closed && R.str.closed && R.car.closed){ xp += 50; perfect++ }
+      if (R.wat.closed) xp += 15
+      // water only counts towards perfect days from when it was added
+      const watOk = !S.waterSince || k < S.waterSince || R.wat.closed
+      if (logged && R.cal.closed && R.pro.closed && R.str.closed && R.car.closed && watOk){ xp += 50; perfect++ }
       run = logged ? run+1 : (k === t0 ? run : 0); bestRun = Math.max(bestRun,run)
       pRun = R.pro.closed ? pRun+1 : (k === t0 ? pRun : 0); bestP = Math.max(bestP,pRun)
       maxSteps = Math.max(maxSteps, (S.activity[k]||{}).steps||0)

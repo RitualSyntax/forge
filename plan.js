@@ -39,6 +39,7 @@ VIEWS.plan = {
       <div class="grid3"><div><label for="s_stepGoal">Step goal</label><input id="s_stepGoal" data-s="stepGoal" inputmode="numeric" value="${st.stepGoal}"></div>
       <div><label for="s_cardioGoal">Cardio min</label><input id="s_cardioGoal" data-s="cardioGoal" inputmode="numeric" value="${st.cardioGoal}"></div>
       <div><label for="s_setGoal">Sets / session</label><input id="s_setGoal" data-s="setGoal" inputmode="numeric" value="${st.setGoal}"></div></div>
+      <label for="s_waterGoal">Water goal ml (0 = auto, ${fmt(Math.round((+S.profile.weight||75)*35/250)*250)})</label><input id="s_waterGoal" data-s="waterGoal" inputmode="numeric" value="${st.waterGoal||0}">
       <label for="s_restSecs">Rest timer (seconds)</label><input id="s_restSecs" data-s="restSecs" inputmode="numeric" value="${st.restSecs}">
       <label>Rest days (Strength ring closes itself)</label>
       <div class="chips">${[1,2,3,4,5,6,0].map(d => `<button class="chip ${st.rest.includes(d)?'on':''}" data-a="restDay" data-d="${d}">${DAYS[d]}</button>`).join('')}</div>
@@ -53,7 +54,7 @@ VIEWS.plan = {
   },
   after(){ planOut(); adaptOut(); splitOut()
     document.querySelectorAll('[data-p]').forEach(i => i.oninput = () => { const k = i.dataset.p; S.profile[k] = i.value === '' ? '' : num(i.value); liveSave() })
-    document.querySelectorAll('[data-s]').forEach(i => i.oninput = () => { const v = Math.round(num(i.value)); if (v > 0){ S.settings[i.dataset.s] = v; liveSave() } })
+    document.querySelectorAll('[data-s]').forEach(i => i.oninput = () => { const v = Math.round(num(i.value)); if (v > 0 || (i.dataset.s === 'waterGoal' && i.value !== '')){ S.settings[i.dataset.s] = v; liveSave() } })
     const rr = $('#p_rate'); if (rr) rr.oninput = () => { S.profile.rate = +rr.value; $('#rateLbl').textContent = `${r1(+rr.value)}% of bodyweight per ${GOALS[S.profile.goal].per==='wk'?'week':'month'}`; liveSave() }
     $('#impFile').onchange = importFile
   }

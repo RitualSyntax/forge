@@ -52,3 +52,20 @@ async function nativeExport(json, name){
   const r = await FS.writeFile({path:name, data:json, directory:'CACHE', encoding:'utf8'})
   await SH.share({title:'Forge backup', url:r.uri, dialogTitle:'Save backup'})
 }
+
+// home screen widget - send today's rings + kcal left to the native side
+let widgetT = 0
+function pushWidget(){
+  if (!NATIVE) return
+  clearTimeout(widgetT)
+  widgetT = setTimeout(() => {
+    try {
+      const t = today(), R = ringsFor(S,D,t), tg = dayTargets(S,t), eaten = (D.day[t]||{}).kcal || 0, left = tg.kcal - eaten
+      const tm = dayTargets(S, addDays(t,1))
+      capPlugin('ForgeWidget').update({
+        date:t, set:!!tg.kcal, left:fmt(Math.abs(left)), over:left < 0, fresh:tm.kcal ? fmt(tm.kcal) : '—',
+        rings:RING_ORDER.map(k => ({c:RING_COL[k], v:Math.max(0, Math.min(1, R[k].v || 0))}))
+      }).catch(() => {})
+    } catch(e){}
+  }, 300)
+}

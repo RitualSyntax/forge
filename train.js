@@ -262,6 +262,7 @@ function muscleCard(){
   const max = 24
   return `<div class="card"><div class="row between"><h2 style="margin:0">Sets this week</h2><span class="mono dim">Target 10–20</span></div>
     <p class="small dim" style="margin:6px 0 10px">Direct hard sets per muscle since Monday. 10–20 a week is the usual range for growth.</p>
+    ${muscleMap(now)}
     ${gs.map(g => { const v = now[g]||0, p = prev[g]||0, col = v >= 10 ? 'var(--red)' : 'var(--blood)'
       return `<div class="mbar"><div class="row between"><span>${g}</span><span class="mono dim">${v}${p ? ` · last wk ${p}` : ''}</span></div>
         <div class="track" style="position:relative;height:8px"><span style="position:absolute;left:${10/max*100}%;width:${10/max*100}%;top:0;bottom:0;background:#1d0606"></span><i style="position:relative;width:${Math.min(100,v/max*100)}%;background:${col};color:${col}"></i></div></div>` }).join('')}
@@ -284,4 +285,43 @@ A.exRange = el => {
     if (!(lo > 0 && hi >= lo && inc > 0)) return toast('Check those numbers')
     S.exCfg = S.exCfg || {}; S.exCfg[id] = {lo, hi, inc}; closeSheet(); commit({quiet:true})
   }
+}
+
+// ---------- muscle map - pixel body, front + back ----------
+const BODY_FRONT = [
+  '......hhh......','.....hhhhh.....','.....hhhhh.....','......hhh......','.......n.......',
+  '..sscccccccss..','.ssscccccccsss.','.bb.ccccccc.bb.','.bb.ccccccc.bb.','.bb.oaaaaao.bb.',
+  '.ff.oaaaaao.ff.','.ff..aaaaa..ff.','.ff..aaaaa..ff.','ff..qqqqqqq..ff','....qqq.qqq....',
+  '....qqq.qqq....','....qqq.qqq....','....qqq.qqq....','....qq...qq....','....kk...kk....',
+  '....ll...ll....','....ll...ll....','....ll...ll....','...fff...fff...'
+]
+const BODY_BACK = [
+  '......hhh......','.....hhhhh.....','.....hhhhh.....','......hhh......','......BBB......',
+  '..ssBBBBBBBss..','.sssBBBBBBBsss.','.rr.BBBBBBB.rr.','.rr.BBBBBBB.rr.','.rr..BBBBB..rr.',
+  '.ff..wwwww..ff.','.ff..wwwww..ff.','.ff..wwwww..ff.','ff.ggggggggg.ff','....ggg.ggg....',
+  '....mmm.mmm....','....mmm.mmm....','....mmm.mmm....','....mm...mm....','....kk...kk....',
+  '....cc...cc....','....cc...cc....','....cc...cc....','...fff...fff...'
+]
+const PIX_F = {s:'Shoulders',c:'Chest',b:'Biceps',a:'Core',o:'Core',q:'Legs',l:'Legs'}
+const PIX_B = {B:'Back',w:'Back',s:'Shoulders',r:'Triceps',g:'Legs',m:'Legs',c:'Legs'}
+function heat(v){
+  if (!v) return '#161616'
+  const t = Math.min(1, v/10) // ramps to full red at 10 sets
+  const lerp = (a,b) => Math.round(a + (b-a)*t)
+  return `rgb(${lerp(70,255)},${lerp(6,26)},${lerp(6,26)})`
+}
+function muscleMap(sets){
+  const val = g => (sets[g]||0) + ((g === 'Biceps' || g === 'Triceps') ? (sets.Arms||0) : 0)
+  const fig = (rows, map, ox) => rows.map((row,y) => [...row].map((ch,x) => {
+    if (ch === '.') return ''
+    const g = map[ch], v = g ? val(g) : 0
+    const fill = g ? heat(v) : '#0e0e0e'
+    return `<rect x="${ox+x}" y="${y}" width=".9" height=".9" fill="${fill}"${g && v >= 10 ? ' filter="url(#mg)"' : ''}><title>${g ? `${g}: ${v} sets` : ''}</title></rect>`
+  }).join('')).join('')
+  return `<svg viewBox="-1 -1 34 27" style="width:100%;max-width:420px;display:block;margin:0 auto 6px" role="img" aria-label="Muscle map">
+    <defs><filter id="mg" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".35" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    ${fig(BODY_FRONT, PIX_F, 0)}${fig(BODY_BACK, PIX_B, 17)}
+    <text x="7.5" y="25.6" text-anchor="middle" font-size="1" fill="#555" font-family="Plex,monospace" letter-spacing=".15">FRONT</text>
+    <text x="24.5" y="25.6" text-anchor="middle" font-size="1" fill="#555" font-family="Plex,monospace" letter-spacing=".15">BACK</text></svg>
+    <div class="row mono dim" style="justify-content:center;gap:14px;margin-bottom:6px;font-size:10px"><span><i style="display:inline-block;width:9px;height:9px;background:#161616;margin-right:5px"></i>0</span><span><i style="display:inline-block;width:9px;height:9px;background:${heat(5)};margin-right:5px"></i>Some</span><span><i style="display:inline-block;width:9px;height:9px;background:#ff1a1a;margin-right:5px;box-shadow:0 0 6px #ff1a1a"></i>10+</span></div>`
 }

@@ -11,6 +11,8 @@ VIEWS.food = {
       ${macroBars(d,k)}
       <p class="small dim" style="margin:6px 0 0">Fibre ${r0(d.fib)}${tg.fib?` / ${tg.fib}`:''} g${S.settings.split && tg.kcal ? ` · <span class="mono" style="color:var(--red)">${S.settings.rest.includes(dow(k)) ? 'Rest day' : 'Training day'}</span>` : ''}</p>
     </div>
+    <div class="card"><div class="row between"><h3>Water</h3><span class="mono" style="color:#4da3ff">${fmt((S.water||{})[k]||0)} / ${fmt(waterGoal(S))} ml</span></div>
+      <div class="track" style="height:6px"><i style="width:${Math.min(100,((S.water||{})[k]||0)/waterGoal(S)*100)}%;background:#4da3ff;color:#4da3ff"></i></div>${waterBtns()}</div>
     ${MEALS.map(m => {
       const es = list.filter(e => e.meal === m), tot = es.reduce((s,e) => s+e.k, 0)
       const canCopy = !es.length && ylist.some(e => e.meal === m)

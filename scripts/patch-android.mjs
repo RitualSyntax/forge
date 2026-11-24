@@ -34,7 +34,16 @@ const acts = `
         </activity-alias>
 `
 if (!m.includes('READ_STEPS')) m = m.replace('</manifest>', perms + '</manifest>')
+const widget = `
+        <receiver android:name=".ForgeWidget" android:exported="false" android:label="Forge">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/forge_widget_info" />
+        </receiver>
+`
 if (!m.includes('PermissionsRationaleActivity')) m = m.replace('</application>', acts + '    </application>')
+if (!m.includes('ForgeWidget')) m = m.replace('</application>', widget + '    </application>')
 writeFileSync(mf, m)
 
 // health connect needs 26+
@@ -46,8 +55,9 @@ const run = process.env.GITHUB_RUN_NUMBER || '1'
 const bg = 'android/app/build.gradle'
 writeFileSync(bg, readFileSync(bg, 'utf8').replace(/versionCode \d+/, `versionCode ${run}`).replace(/versionName "[^"]*"/, `versionName "1.${run}"`))
 
-// our icons over the capacitor ones
+// our icons, widget layouts + java (mainactivity, widget) over the capacitor ones
 cpSync('android-res/res', join(main, 'res'), {recursive:true})
+cpSync('android-res/java', join(main, 'java'), {recursive:true})
 
 // black splash everywhere
 const walk = d => readdirSync(d).flatMap(f => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : [p] })

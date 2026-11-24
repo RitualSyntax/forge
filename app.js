@@ -8,8 +8,8 @@ function fresh(){
   const s = {v:1,
     profile:{sex:'m',age:'',height:'',weight:'',bf:'',neat:'feet',days:6,mins:60,cardio:0,goal:'leanbulk',exp:'inter',rate:null,adj:0},
     targets:{kcal:0,prot:0,fat:0,carb:0,fib:0},
-    settings:{stepGoal:8000,cardioGoal:20,setGoal:16,rest:[5],restSecs:120,split:0},
-    foods:{}, diary:{}, workouts:[], active:null, cardio:{}, activity:{}, weights:{}, measures:{},
+    settings:{stepGoal:8000,cardioGoal:20,setGoal:16,rest:[5],restSecs:120,split:0,waterGoal:0},
+    foods:{}, diary:{}, water:{}, workouts:[], active:null, cardio:{}, activity:{}, weights:{}, measures:{},
     customEx:[], presets:[], exCfg:{}, checkins:{}, routines:JSON.parse(JSON.stringify(ROUTINES)), maintOverride:null,
     seen:{badges:[],L:1}}
   STARTER_FOODS.forEach(([name,k,p,c,f,fib,sv]) => {
@@ -57,7 +57,7 @@ function commit(opts = {}){
   save()
   D = derive(S)
   const after = ringsFor(S,D,t)
-  const names = {cal:'Fuel',pro:'Protein',str:'Strength',car:'Cardio'}
+  const names = {cal:'Fuel',pro:'Protein',str:'Strength',car:'Cardio',wat:'Water'}
   for (const k in names) if (!before[k].closed && after[k].closed && !(k === 'str' && after.str.rest)) toast(`<b>${names[k]} ring closed</b>`)
   const gained = D.xp - xp0
   if (gained >= 5 && !opts.quiet) xpPing(gained)
@@ -67,6 +67,7 @@ function commit(opts = {}){
     const bd = BADGES.find(x => x.id === b); toast(`Badge unlocked: <b>${esc(bd.name)}</b>`, 'lvlup'); S.seen.badges.push(b)
   }
   save()
+  if (typeof pushWidget === 'function') pushWidget()
   if (!opts.noRender) render()
 }
 
@@ -180,18 +181,19 @@ const IC = {
 const datebar = (k, act) => `<div class="datebar"><button class="btn" data-a="${act}" data-d="-1" aria-label="Previous day">${IC.left}</button><div class="grow">${niceDate(k)}</div><button class="btn" data-a="${act}" data-d="1" aria-label="Next day" ${k >= today() ? 'disabled' : ''}>${IC.right}</button></div>`
 
 // ---------- rings ----------
-const RING_COL = {cal:'#ff1a1a',pro:'#f2f2f2',str:'#ff6b2b',car:'#8a8a8a'}
-const RING_NAME = {cal:'Fuel',pro:'Protein',str:'Strength',car:'Cardio'}
+const RING_ORDER = ['cal','pro','str','car','wat']
+const RING_COL = {cal:'#ff1a1a',pro:'#f2f2f2',str:'#ff6b2b',car:'#8a8a8a',wat:'#4da3ff'}
+const RING_NAME = {cal:'Fuel',pro:'Protein',str:'Strength',car:'Cardio',wat:'Water'}
 function ringsSvg(R){
-  const order = ['cal','pro','str','car'], sw = 16
+  const order = RING_ORDER, sw = 13
   let out = '<svg class="rings" viewBox="0 0 200 200" role="img" aria-label="Daily rings"><defs><filter id="gl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
   order.forEach((k,i) => {
-    const r = 90 - i*(sw+4), C = 2*Math.PI*r, v = Math.max(0, Math.min(R[k].v, 1))
+    const r = 92 - i*(sw+4), C = 2*Math.PI*r, v = Math.max(0, Math.min(R[k].v, 1))
     out += `<circle cx="100" cy="100" r="${r}" stroke="${RING_COL[k]}" stroke-width="${sw}" opacity=".13"/>`
     out += `<circle class="arc" cx="100" cy="100" r="${r}" stroke="${RING_COL[k]}" stroke-width="${sw}" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C*(1-v)}" transform="rotate(-90 100 100)" filter="url(#gl)" ${v <= 0 ? 'opacity="0"' : ''}/>`
   })
   // sigil in the middle
-  out += `<g stroke="#ff1a1a" stroke-width="1.2" fill="none" opacity=".85" filter="url(#gl)"><circle cx="100" cy="100" r="11"/><path d="M90.5 95.5h19L100 112z"/><path d="M100 86v28"/></g><circle cx="100" cy="100" r="1.6" fill="#ff1a1a"/>`
+  out += `<g stroke="#ff1a1a" stroke-width="1" fill="none" opacity=".85" filter="url(#gl)"><circle cx="100" cy="100" r="8"/><path d="M93 96.7h14L100 109z"/><path d="M100 89.5v21"/></g><circle cx="100" cy="100" r="1.2" fill="#ff1a1a"/>`
   return out + '</svg>'
 }
 function animateRings(){
@@ -204,7 +206,7 @@ VIEWS.home = {
     const t = today(), R = ringsFor(S,D,t), tg = dayTargets(S,t), d = D.day[t] || {kcal:0}
     const left = tg.kcal - d.kcal
     const dateTxt = toDate(t).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})
-    const allDone = R.cal.closed && R.pro.closed && R.str.closed && R.car.closed
+    const allDone = R.cal.closed && R.pro.closed && R.str.closed && R.car.closed && R.wat.closed
     return `<div class="home">
       <div class="mono date">${dateTxt}</div>
       <button class="ringbtn" data-a="ringInfo" aria-label="Ring details">${ringsSvg(R)}</button>
@@ -228,7 +230,9 @@ A.ringInfo = () => {
       ${row('pro', `${r0(R.pro.now)} of ${tg.prot || '—'} g protein.`)}
       ${row('str', R.str.rest ? 'Rest day. It closes itself.' : `${R.str.now} of ${R.str.goal} working sets.`)}
       ${row('car', `${fmt(R.car.steps)} of ${fmt(st.stepGoal)} steps${R.car.cmins ? `, ${R.car.cmins} min cardio` : ''}. Either one closes it.`)}
+      ${row('wat', `${fmt(R.wat.now)} of ${fmt(R.wat.goal)} ml.`)}
     </div>
+    ${waterBtns()}
     <div class="grid2" style="margin-top:18px"><button class="btn pri" data-a="scan">Scan food</button><button class="btn" data-a="activity">Add steps</button></div>`)
 }
 
@@ -248,6 +252,19 @@ A.activity = () => {
   $('#svA').onclick = () => { S.activity[t] = {steps:r0(num($('#st').value)), active:r0(num($('#ak').value))}; closeSheet(); commit() }
 }
 
+// ---------- water ----------
+function waterBtns(){
+  return `<div class="grid3" style="margin-top:16px"><button class="btn" data-a="water" data-ml="250">+250 ml</button><button class="btn" data-a="water" data-ml="500">+500 ml</button><button class="btn ghost" data-a="water" data-ml="-250">−250</button></div>`
+}
+A.water = el => {
+  const k = UI.tab === 'food' ? UI.fdate : today()
+  S.water = S.water || {}
+  S.water[k] = Math.max(0, (S.water[k]||0) + +el.dataset.ml)
+  const open = sheetOpen
+  commit()
+  if (open && $('#sheetBody .legend')) A.ringInfo()
+}
+
 // ---------- level - xp, quests, badges ----------
 VIEWS.level = {
   html(){
@@ -258,6 +275,7 @@ VIEWS.level = {
       R.str.rest ? {name:'Rest day. Recover and eat well',xp:0,done:true}
         : {name:`Log ${S.settings.setGoal} working sets`,xp:40,done:R.str.closed,a:'train'},
       {name:`${fmt(S.settings.stepGoal)} steps or ${S.settings.cardioGoal} min cardio`,xp:25,done:R.car.closed,a:'activity'},
+      {name:`Drink ${fmt(R.wat.goal)} ml water`,xp:15,done:R.wat.closed,a:'ringInfo'},
       {name:'Weigh in',xp:15,done:!!S.weights[t],a:'logWeight'}
     ]
     return `${checkinHtml()}<div class="card">
@@ -277,16 +295,18 @@ VIEWS.level = {
     <div class="card"><h2>Badges</h2>
       <div class="ach">${BADGES.map(b => { const on = D.badges.includes(b.id); return `<div class="badge ${on?'on':''}" style="color:${on?'var(--red)':'var(--faint)'}">${IC.medal}<b style="color:${on?'var(--red)':'var(--ink)'}">${on ? esc(b.name) : '???'}</b><span class="dim">${esc(b.desc)}</span></div>` }).join('')}</div></div>
     <div class="card"><h2>How XP works</h2><div class="why small"><ul>
-      <li>Food logged: 5 XP each, up to 40 a day</li><li>Fuel or protein ring: 30 each · Strength ring: 40 · Cardio ring: 25</li>
-      <li>Weigh-in: 15 · Every set: 2 · Finished workout: 30 · New PB: 25</li><li>Perfect day, all four rings: 50 bonus</li></ul></div></div>`
+      <li>Food logged: 5 XP each, up to 40 a day</li><li>Fuel or protein ring: 30 each · Strength ring: 40 · Cardio ring: 25 · Water ring: 15</li>
+      <li>Weigh-in: 15 · Every set: 2 · Finished workout: 30 · New PB: 25</li><li>Perfect day, every ring closed: 50 bonus</li></ul></div></div>`
   }
 }
 
 // ---------- boot ----------
 addEventListener('DOMContentLoaded', () => {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{})
+  if (!S.waterSince){ S.waterSince = today(); save() }
   syncTargets(); D = derive(S); S.seen.L = Math.max(S.seen.L, D.level.L); S.seen.badges = [...new Set([...S.seen.badges, ...D.badges])]
   render()
+  if (typeof pushWidget === 'function') pushWidget()
   setInterval(tick, 500)
   if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{})
 })

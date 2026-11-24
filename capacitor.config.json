@@ -1,0 +1,9 @@
+{
+  "appId": "com.ritualsyntax.forge",
+  "appName": "Forge",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force"
+  }
+}

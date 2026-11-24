@@ -39,13 +39,15 @@ VIEWS.body = {
       <p class="small dim" style="margin:0">Change since ${niceDate(ms[0])}. On a muscle-building phase you want arms and chest going up while waist stays put.</p>`
       : '<p class="small dim" style="margin:8px 0 0">Measure every 2–4 weeks. Waist vs arms and chest is the best way to tell muscle from fat when the scale goes up.</p>'}
     </div>
+    ${photoCard()}
     <div class="card"><h3>Weigh-ins</h3>${ws.slice(-10).reverse().map(k => `<div class="item" data-a="logWeight" data-k="${k}"><div class="grow t">${niceDate(k)}</div><div class="v">${kg(S.weights[k])} kg</div></div>`).join('') || '<div class="empty">None yet</div>'}</div>`
   },
   after(){
     const ks = Object.keys(S.weights).sort(), from = UI.wrange ? addDays(today(), -UI.wrange) : '0'
     const pts = ks.filter(k => k >= from).map(k => ({k, y:S.weights[k]}))
     const line = Object.keys(D.trend).sort().filter(k => k >= from).map(k => ({k, y:D.trend[k]}))
-    lineChart($('#wChart'), pts, line, 'var(--car)')
+    lineChart($('#wChart'), pts, line, 'var(--red)')
+    loadPhotos()
   }
 }
 A.wrange = el => { UI.wrange = +el.dataset.v; render() }

@@ -1,0 +1,18 @@
+{
+  "name": "forge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Forge - training, food and body tracker",
+  "scripts": {
+    "www": "node scripts/build-www.mjs",
+    "android:init": "npm run www && npx cap add android && node scripts/patch-android.mjs && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/cli": "8.6.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/share": "8.0.3",
+    "capacitor-health": "8.4.0"
+  }
+}

@@ -29,8 +29,10 @@ function idleHtml(){
     <div class="chips" style="margin:12px 0">${S.routines.map(r => `<button class="chip" data-a="startW" data-r="${r.id}">${esc(r.name)}</button>`).join('')}</div>
     <button class="btn pri full" data-a="startW">${IC.lift.replace('<svg','<svg class="icon"')}Empty workout</button>
   </div>
+  ${muscleCard()}
+  ${stallCard()}
   <div class="card"><div class="row between"><h3>Cardio today</h3><button class="btn sm" data-a="logCardio">+ Log</button></div>
-    ${cardioToday.map((c,i) => `<div class="item" data-a="delCardio" data-i="${i}"><div class="grow"><div class="t">${esc(c.type)}</div><div class="s">${c.mins} min${c.kcal?` · ${c.kcal} kcal`:''}</div></div><span class="faint">×</span></div>`).join('') || '<div class="empty">Steps count towards the cardio ring too. Add them from Today.</div>'}
+    ${cardioToday.map((c,i) => `<div class="item" data-a="delCardio" data-i="${i}"><div class="grow"><div class="t">${esc(c.type)}</div><div class="s">${c.mins} min${c.kcal?` · ${c.kcal} kcal`:''}</div></div><span class="faint">×</span></div>`).join('') || '<div class="empty">Steps count towards the cardio ring too. Tap the rings on Home to add them.</div>'}
   </div>
   <div class="card"><h2>History</h2>
     ${hist.map(w => { const n = w.ex.reduce((s,x) => s+x.sets.length,0); return `<div class="item" data-a="viewW" data-id="${w.id}"><div class="grow"><div class="t">${esc(w.name)}</div><div class="s">${niceDate(w.date)} · ${n} sets · ${dur(w.end-w.start)}</div></div><div class="v">${fmt(volOf(w))} kg</div></div>` }).join('') || '<div class="empty">Your finished workouts show up here.</div>'}
@@ -54,8 +56,13 @@ function activeHtml(){
 function exCard(x, xi){
   const ex = exById(x.id), lt = lastTime(x.id), w = S.active
   const nextI = x.sets.length
-  const pre = x.sets[nextI-1] || (lt && (lt.sets[nextI] || lt.sets[lt.sets.length-1])) || {kg:'',r:''}
+  const sug = suggest(S, x.id), c = exCfg(S, x.id), stuck = stalled(S, x.id)
+  const pre = x.sets[nextI-1] || (sug ? {kg:sug.kg, r:sug.r} : lt && (lt.sets[nextI] || lt.sets[lt.sets.length-1])) || {kg:'',r:''}
+  const topLast = lt ? Math.max(...lt.sets.map(s => s.kg)) : 0
   return `<div class="ex"><div class="row between"><div><h3>${esc(ex.name)}</h3><span class="small dim">${lt ? `Last time: ${lt.sets.map(s => `${kg(s.kg)}×${s.r}`).join(' · ')}` : 'First time logging this'}</span></div><button class="x" data-a="rmEx" data-xi="${xi}" aria-label="Remove exercise">⋯</button></div>
+    <button class="btn ghost sm full" data-a="exRange" data-id="${x.id}" style="margin-top:8px;justify-content:space-between;color:var(--red)"><span>${sug ? `Target ${sug.kg ? kg(sug.kg)+' kg × ' : ''}${sug.r}+ reps` : `Aim for ${c.lo}–${c.hi} reps`}</span><span class="dim">${c.lo}–${c.hi}</span></button>
+    ${sug ? `<p class="small dim" style="margin:6px 0 0">${sug.why}</p>` : ''}
+    ${stuck ? `<p class="small" style="margin:6px 0 0;color:var(--str)">Stalled for 3 sessions. Try a deload: ${kg(Math.round(topLast*.9/2.5)*2.5)} kg for a week, or swap the variation.</p>` : ''}
     ${x.sets.length ? `<table class="sets">${x.sets.map((s,si) => `<tr><td>${si+1}</td><td><b>${ex.bw && !s.kg ? 'BW' : (ex.bw ? '+' : '') + kg(s.kg) + ' kg'}</b> × ${s.r}${D.pbSets[`${w.id}:${xi}:${si}`] ? ' <span class="pb">PB</span>' : ''}</td><td style="text-align:right"><button class="x" data-a="rmSet" data-xi="${xi}" data-si="${si}" aria-label="Delete set">×</button></td></tr>`).join('')}</table>` : ''}
     <div class="setin"><div><label for="kg${xi}">${ex.bw ? 'Added kg' : 'kg'}</label><input id="kg${xi}" inputmode="decimal" value="${pre.kg ?? ''}"></div><div><label for="r${xi}">Reps</label><input id="r${xi}" inputmode="numeric" value="${pre.r ?? ''}"></div><button class="btn pri" data-a="addSet" data-xi="${xi}">Log set ${nextI+1}</button></div>
   </div>`
@@ -245,4 +252,36 @@ function lineChart(svg, pts, line, col){
   }
   draw()
   if (!svg._ro){ svg._ro = new ResizeObserver(draw); svg._ro.observe(svg) }
+}
+
+// ---------- coaching bits ----------
+function muscleCard(){
+  const t = today(), mon = mondayOf(t)
+  const now = setsByMuscle(S, mon, t), prev = setsByMuscle(S, addDays(mon,-7), addDays(mon,-1))
+  const gs = MUSCLES.filter(g => g !== 'Arms' || now.Arms || prev.Arms)
+  const max = 24
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Sets this week</h2><span class="mono dim">Target 10–20</span></div>
+    <p class="small dim" style="margin:6px 0 10px">Direct hard sets per muscle since Monday. 10–20 a week is the usual range for growth.</p>
+    ${gs.map(g => { const v = now[g]||0, p = prev[g]||0, col = v >= 10 ? 'var(--red)' : 'var(--blood)'
+      return `<div class="mbar"><div class="row between"><span>${g}</span><span class="mono dim">${v}${p ? ` · last wk ${p}` : ''}</span></div>
+        <div class="track" style="position:relative;height:8px"><span style="position:absolute;left:${10/max*100}%;width:${10/max*100}%;top:0;bottom:0;background:#1d0606"></span><i style="position:relative;width:${Math.min(100,v/max*100)}%;background:${col};color:${col}"></i></div></div>` }).join('')}
+  </div>`
+}
+function stallCard(){
+  const ids = [...new Set(S.workouts.slice(-30).flatMap(w => w.ex.map(x => x.id)))].filter(id => stalled(S,id))
+  if (!ids.length) return ''
+  return `<div class="card" style="border-color:var(--str)"><h2 style="margin:0 0 6px">Stalled lifts</h2>
+    <p class="small dim">No new best in the last 3 sessions. Take a lighter week (about 10% off), check sleep and food, or swap to a similar exercise.</p>
+    ${ids.map(id => `<div class="item" data-a="viewEx" data-id="${id}"><div class="grow t">${esc(exById(id).name)}</div><span class="mono dim">${kg(r1(D.best[id]||0))} kg</span></div>`).join('')}</div>`
+}
+A.exRange = el => {
+  const id = el.dataset.id, c = exCfg(S,id)
+  openSheet(`${sheetHead(esc(exById(id).name))}<p class="small dim">Rep range for progression. Once every set hits the top number, the target moves up by the step and drops back to the bottom of the range.</p>
+    <div class="grid3"><div><label for="rlo">Low reps</label><input id="rlo" inputmode="numeric" value="${c.lo}"></div><div><label for="rhi">High reps</label><input id="rhi" inputmode="numeric" value="${c.hi}"></div><div><label for="rinc">Step kg</label><input id="rinc" inputmode="decimal" value="${c.inc}"></div></div>
+    <button class="btn pri full" id="rsv" style="margin-top:14px">Save</button>`)
+  $('#rsv').onclick = () => {
+    const lo = Math.round(num($('#rlo').value)), hi = Math.round(num($('#rhi').value)), inc = num($('#rinc').value)
+    if (!(lo > 0 && hi >= lo && inc > 0)) return toast('Check those numbers')
+    S.exCfg = S.exCfg || {}; S.exCfg[id] = {lo, hi, inc}; closeSheet(); commit({quiet:true})
+  }
 }

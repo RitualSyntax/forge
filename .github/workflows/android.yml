@@ -1,0 +1,39 @@
+# builds the android app on every push and puts Forge.apk on the "android" release
+name: Android APK
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run android:init
+      # same key every build so updates install over the top
+      - run: mkdir -p ~/.android && cp android-res/forge.keystore ~/.android/debug.keystore
+      - run: cd android && ./gradlew assembleDebug --no-daemon
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Forge.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Forge-apk
+          path: Forge.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android
+          name: Forge Android
+          body: Latest Android build. Download Forge.apk on your phone and install it.
+          files: Forge.apk
+          make_latest: true

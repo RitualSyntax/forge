@@ -51,7 +51,7 @@ function makePlan(p, maintOverride){
   const rate = goalRate(p)
   const kgWk = g.per === 'wk' ? w*rate/100 : g.per === 'mo' ? w*rate/100/4.345 : 0
   let delta = g.per ? g.sign * kgWk * KCAL_KG / 7 : maint * g.fixed
-  let kcal = Math.round((maint + delta)/10)*10
+  let kcal = Math.round((maint + delta + (+p.adj||0))/10)*10
   if (kcal < bmr) kcal = Math.round(bmr/10)*10 // dont go under bmr
   delta = kcal - maint
   const prot = Math.round(w * g.prot)
@@ -121,9 +121,17 @@ function measuredMaint(S, D){
 const e1rm = (kg,r) => r <= 0 || kg <= 0 ? 0 : r === 1 ? kg : kg*(1+Math.min(r,15)/30)
 const exById = id => EXERCISES.find(e => e.id === id) || (window.S && S.customEx.find(e => e.id === id)) || {id,name:id,group:'Other'}
 
+// training days get more carbs, rest days less - weekly total stays the same
+function dayTargets(S, k){
+  const t = S.targets, sp = +S.settings.split || 0, rest = S.settings.rest
+  if (!t.kcal || !sp || !rest.length || rest.length === 7) return t
+  const d = rest.includes(dow(k)) ? -sp*(7-rest.length)/rest.length : sp
+  return {...t, kcal:Math.round((t.kcal+d)/10)*10, carb:Math.max(0, Math.round(t.carb + d/4))}
+}
+
 // ---------- rings for a day ----------
 function ringsFor(S, D, k){
-  const t = S.targets, st = S.settings, day = D.day[k] || {}
+  const t = dayTargets(S,k), st = S.settings, day = D.day[k] || {}
   const kcal = day.kcal || 0, prot = day.p || 0
   const rest = st.rest.includes(dow(k)) && !(day.sets > 0)
   const steps = (S.activity[k] || {}).steps || 0
@@ -139,7 +147,7 @@ function ringsFor(S, D, k){
 
 // ---------- everything derived ----------
 function derive(S){
-  const D = {day:{}, pbSets:{}, best:{}, pbs:0, workouts:0, sets:0, volume:0, legDays:0}
+  const D = {day:{}, pbSets:{}, pbDays:{}, best:{}, pbs:0, workouts:0, sets:0, volume:0, legDays:0}
   const dayOf = k => D.day[k] || (D.day[k] = {kcal:0,p:0,c:0,f:0,fib:0,n:0,sets:0,cardio:0})
   let foodEntries = 0
   for (const [k,list] of Object.entries(S.diary)){
@@ -160,7 +168,7 @@ function derive(S){
         const load = ex.bw ? bw + (s.kg||0) : s.kg
         D.volume += load * s.r
         const e = e1rm(load, s.r), prev = D.best[x.id] || 0, old = before[x.id] || 0
-        if (e > prev + .01){ if (old > 0){ D.pbSets[`${w.id}:${xi}:${si}`] = 1; D.pbs++ } D.best[x.id] = e }
+        if (e > prev + .01){ if (old > 0){ D.pbSets[`${w.id}:${xi}:${si}`] = 1; D.pbs++; D.pbDays[w.date] = (D.pbDays[w.date]||0)+1 } D.best[x.id] = e }
       })
       if (ex.group === 'Legs' && x.sets.length) legs = true
     })
@@ -172,7 +180,7 @@ function derive(S){
 
   // xp + streaks
   const t0 = today()
-  let xp = D.sets*2 + D.workouts*30 + D.pbs*25
+  let xp = D.sets*2 + D.workouts*30 + D.pbs*25 + Object.keys(S.checkins||{}).length*25
   let perfect = 0, run = 0, bestRun = 0, pRun = 0, bestP = 0, maxSteps = 0
   const allDays = new Set([...Object.keys(D.day), ...Object.keys(S.weights), ...Object.keys(S.activity)])
   const ks = [...allDays].filter(k => k <= t0).sort()
@@ -193,7 +201,7 @@ function derive(S){
     }
   }
   D.xp = xp; D.streak = run; D.bestStreak = bestRun; D.bestProteinRun = bestP; D.perfectDays = perfect
-  D.maxSteps = maxSteps; D.foodEntries = foodEntries; D.weighIns = Object.keys(S.weights).length
+  D.maxSteps = maxSteps; D.foodEntries = foodEntries; D.weighIns = Object.keys(S.weights).length; D.checkins = Object.keys(S.checkins||{}).length; D.photos = S.photoCount||0
   D.libSize = Object.keys(S.foods).length; D.scanned = Object.values(S.foods).filter(f => f.scanned).length
   D.level = levelOf(xp)
   D.badges = BADGES.filter(b => b.test(D)).map(b => b.id)
@@ -204,4 +212,44 @@ function levelOf(xp){
   let L = 1, base = 0, step = 100
   while (xp >= base + step){ base += step; L++; step = 100 + 60*(L-1) }
   return {L, into:xp-base, need:step, title:TITLES[Math.min(Math.floor((L-1)/4), TITLES.length-1)]}
+}
+
+// ---------- coaching ----------
+const COMPOUND = ['bench-press','incline-bench','incline-db-press','flat-db-press','machine-chest-press','squat','hack-squat','leg-press','deadlift','rdl','ohp','db-shoulder-press','machine-shoulder-press','barbell-row','db-row','chest-supported-row','seated-cable-row','lat-pulldown','pull-ups','chin-ups','dips','close-grip-bench','bulgarian-split','hip-thrust']
+function exCfg(S, id){
+  const c = (S.exCfg||{})[id]; if (c) return c
+  const ex = exById(id), comp = COMPOUND.includes(id)
+  const db = /db|dumbbell/i.test(id + ex.name)
+  return {lo:comp ? 6 : 10, hi:comp ? 10 : 15, inc:db ? 2 : 2.5}
+}
+// double progression - hit top of range on every set, add weight
+function suggest(S, id){
+  const lt = lastTime(id); if (!lt) return null
+  const c = exCfg(S,id), ex = exById(id)
+  const top = Math.max(...lt.sets.map(s => s.kg))
+  const at = lt.sets.filter(s => s.kg === top)
+  const minR = Math.min(...at.map(s => s.r))
+  if (minR >= c.hi){
+    if (ex.bw && top === 0) return {kg:0, r:c.hi, up:true, why:`Top of the range on every set. Add ${c.inc} kg or a harder variation.`}
+    return {kg:r1(top + c.inc), r:c.lo, up:true, why:`Top of the range on every set last time. Add weight.`}
+  }
+  return {kg:top, r:Math.min(c.hi, Math.max(c.lo, minR+1)), up:false, why:`Same weight, beat last time by a rep.`}
+}
+// stalled = last 3 sessions didn't beat the best before them
+function stalled(S, id){
+  const ex = exById(id), sess = []
+  for (const w of S.workouts){ const x = w.ex.find(x => x.id === id && x.sets.length); if (x) sess.push(Math.max(...x.sets.map(s => e1rm(ex.bw ? 75 + s.kg : s.kg, s.r)))) }
+  if (sess.length < 4) return false
+  const last3 = sess.slice(-3), before = sess.slice(0,-3)
+  return Math.max(...last3) <= Math.max(...before) + .01
+}
+const mondayOf = k => addDays(k, -((dow(k)+6)%7))
+const MUSCLES = ['Chest','Back','Shoulders','Biceps','Triceps','Arms','Legs','Core']
+function setsByMuscle(S, from, to){
+  const out = {}
+  for (const w of [...S.workouts, ...(S.active ? [S.active] : [])]){
+    if (w.date < from || w.date > to) continue
+    for (const x of w.ex){ const g = exById(x.id).group; out[g] = (out[g]||0) + x.sets.length }
+  }
+  return out
 }

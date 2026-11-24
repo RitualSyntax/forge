@@ -16,11 +16,11 @@ const EXERCISES = [
   ['machine-shoulder-press','Machine Shoulder Press','Shoulders'],['lateral-raise','Lateral Raise','Shoulders'],
   ['cable-lateral','Cable Lateral Raise','Shoulders'],['rear-delt-fly','Rear Delt Fly','Shoulders'],
   ['face-pull','Face Pull','Shoulders'],
-  // arms
-  ['barbell-curl','Barbell Curl','Arms'],['db-curl','Dumbbell Curl','Arms'],['hammer-curl','Hammer Curl','Arms'],
-  ['incline-curl','Incline Dumbbell Curl','Arms'],['preacher-curl','Preacher Curl','Arms'],['cable-curl','Cable Curl','Arms'],
-  ['tricep-pushdown','Tricep Pushdown','Arms'],['overhead-tricep','Overhead Tricep Extension','Arms'],
-  ['skull-crushers','Skull Crushers','Arms'],['close-grip-bench','Close-Grip Bench','Arms'],
+  // arms - split so the weekly chart shows them apart
+  ['barbell-curl','Barbell Curl','Biceps'],['db-curl','Dumbbell Curl','Biceps'],['hammer-curl','Hammer Curl','Biceps'],
+  ['incline-curl','Incline Dumbbell Curl','Biceps'],['preacher-curl','Preacher Curl','Biceps'],['cable-curl','Cable Curl','Biceps'],
+  ['tricep-pushdown','Tricep Pushdown','Triceps'],['overhead-tricep','Overhead Tricep Extension','Triceps'],
+  ['skull-crushers','Skull Crushers','Triceps'],['close-grip-bench','Close-Grip Bench','Triceps'],
   // legs
   ['squat','Back Squat','Legs'],['hack-squat','Hack Squat','Legs'],['leg-press','Leg Press','Legs'],
   ['rdl','Romanian Deadlift','Legs'],['bulgarian-split','Bulgarian Split Squat','Legs'],['lunges','Walking Lunges','Legs'],
@@ -90,5 +90,7 @@ const BADGES = [
   {id:'v1m',name:'Mountain Mover',desc:'Lift 1,000,000kg total',test:d=>d.volume>=1000000},
   {id:'steps10k',name:'Wanderer',desc:'A 10,000-step day',test:d=>d.maxSteps>=10000},
   {id:'legs',name:'Leg Day Exists',desc:'Train legs',test:d=>d.legDays>=1},
-  {id:'legs10',name:'Never Skip',desc:'10 leg sessions',test:d=>d.legDays>=10}
+  {id:'legs10',name:'Never Skip',desc:'10 leg sessions',test:d=>d.legDays>=10},
+  {id:'check1',name:'Reflection',desc:'Do a weekly check-in',test:d=>d.checkins>=1},
+  {id:'photo1',name:'Mirror Mirror',desc:'Take a progress photo',test:d=>d.photos>=1}
 ]

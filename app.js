@@ -6,11 +6,11 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 function fresh(){
   const s = {v:1,
-    profile:{sex:'m',age:'',height:'',weight:'',bf:'',neat:'feet',days:6,mins:60,cardio:0,goal:'leanbulk',exp:'inter',rate:null},
+    profile:{sex:'m',age:'',height:'',weight:'',bf:'',neat:'feet',days:6,mins:60,cardio:0,goal:'leanbulk',exp:'inter',rate:null,adj:0},
     targets:{kcal:0,prot:0,fat:0,carb:0,fib:0},
-    settings:{stepGoal:8000,cardioGoal:20,setGoal:16,rest:[5],restSecs:120},
+    settings:{stepGoal:8000,cardioGoal:20,setGoal:16,rest:[5],restSecs:120,split:0},
     foods:{}, diary:{}, workouts:[], active:null, cardio:{}, activity:{}, weights:{}, measures:{},
-    customEx:[], routines:JSON.parse(JSON.stringify(ROUTINES)), maintOverride:null,
+    customEx:[], presets:[], exCfg:{}, checkins:{}, routines:JSON.parse(JSON.stringify(ROUTINES)), maintOverride:null,
     seen:{badges:[],L:1}}
   STARTER_FOODS.forEach(([name,k,p,c,f,fib,sv]) => {
     const id = uid(); s.foods[id] = {id,name,brand:'',code:'',k,p,c,f,fib,sv,svName:'serving',src:'starter',used:0,last:0}
@@ -201,7 +201,7 @@ function animateRings(){
 // ---------- home - rings + kcal left, nothing else ----------
 VIEWS.home = {
   html(){
-    const t = today(), R = ringsFor(S,D,t), tg = S.targets, d = D.day[t] || {kcal:0}
+    const t = today(), R = ringsFor(S,D,t), tg = dayTargets(S,t), d = D.day[t] || {kcal:0}
     const left = tg.kcal - d.kcal
     const dateTxt = toDate(t).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})
     const allDone = R.cal.closed && R.pro.closed && R.str.closed && R.car.closed
@@ -211,7 +211,8 @@ VIEWS.home = {
       ${tg.kcal ? `<div><div class="left-n ${left < 0 ? 'over' : ''}">${fmt(Math.abs(left))}</div>
         <div class="mono dim" style="margin-top:8px">${left < 0 ? 'kcal over today' : 'kcal left today'}</div></div>`
       : `<div><p class="dim">No plan yet. The rings need numbers.</p><button class="btn pri" data-a="tab" data-v="plan">Set my plan</button></div>`}
-      ${allDone ? '<div class="mono" style="color:var(--red);text-shadow:var(--glow)">All rings closed. It noticed.</div>'
+      ${checkinDue() ? '<button class="btn ghost sm" data-a="tab" data-v="level">Weekly check-in ready ›</button>'
+        : allDone ? '<div class="mono" style="color:var(--red);text-shadow:var(--glow)">All rings closed. It noticed.</div>'
         : !S.seen.swiped ? '<div class="mono hint">‹ swipe ›</div>' : ''}
     </div>`
   },
@@ -219,7 +220,7 @@ VIEWS.home = {
 }
 
 A.ringInfo = () => {
-  const t = today(), R = ringsFor(S,D,t), tg = S.targets, st = S.settings
+  const t = today(), R = ringsFor(S,D,t), tg = dayTargets(S,t), st = S.settings
   const row = (k, txt) => `<div class="leg ${R[k].closed?'done':''}"><i style="background:${RING_COL[k]};color:${RING_COL[k]}"></i><div><b style="color:${RING_COL[k]}">${RING_NAME[k]}</b><span>${txt}</span></div></div>`
   openSheet(`${sheetHead('Today')}
     <div class="legend">
@@ -231,8 +232,8 @@ A.ringInfo = () => {
     <div class="grid2" style="margin-top:18px"><button class="btn pri" data-a="scan">Scan food</button><button class="btn" data-a="activity">Add steps</button></div>`)
 }
 
-function macroBars(d){
-  const tg = S.targets
+function macroBars(d, k){
+  const tg = dayTargets(S, k || today())
   const m = [['Protein',d.p,tg.prot,'var(--pro)'],['Carbs',d.c,tg.carb,'var(--car)'],['Fat',d.f,tg.fat,'var(--cal)']]
   return m.map(([n,v,g,c]) => `<div class="mbar"><div class="row between"><span>${n}</span><span class="dim nowrap">${r0(v)} / ${g||'—'} g</span></div><div class="track"><i style="width:${g?Math.min(100,v/g*100):0}%;background:${c}"></i></div></div>`).join('')
 }
@@ -240,7 +241,7 @@ function macroBars(d){
 A.activity = () => {
   const t = today(), a = S.activity[t] || {}
   openSheet(`${sheetHead('Steps and activity')}
-    <p class="dim small">Copy today's numbers from your phone's fitness app. Automatic syncing comes with the Android version.</p>
+    <p class="dim small">${NATIVE && S.settings.hc ? 'Synced from Health Connect. You can still change it here.' : 'Copy today\'s numbers from your phone\'s fitness app. The Android app syncs them on its own.'}</p>
     <label for="st">Steps today</label><input id="st" inputmode="numeric" value="${a.steps||''}" placeholder="e.g. 9500">
     <label for="ak">Active calories (optional, for reference)</label><input id="ak" inputmode="numeric" value="${a.active||''}">
     <div class="grid2" style="margin-top:16px"><button class="btn" data-a="logCardio">Log cardio session</button><button class="btn pri" id="svA">Save</button></div>`)
@@ -250,7 +251,7 @@ A.activity = () => {
 // ---------- level - xp, quests, badges ----------
 VIEWS.level = {
   html(){
-    const t = today(), R = ringsFor(S,D,t), tg = S.targets, L = D.level
+    const t = today(), R = ringsFor(S,D,t), tg = dayTargets(S,t), L = D.level
     const quests = [
       {name:'Land in your calorie zone',xp:30,done:R.cal.closed,a:'addFood'},
       {name:`Hit ${tg.prot || '—'} g protein`,xp:30,done:R.pro.closed,a:'addFood'},
@@ -259,7 +260,7 @@ VIEWS.level = {
       {name:`${fmt(S.settings.stepGoal)} steps or ${S.settings.cardioGoal} min cardio`,xp:25,done:R.car.closed,a:'activity'},
       {name:'Weigh in',xp:15,done:!!S.weights[t],a:'logWeight'}
     ]
-    return `<div class="card">
+    return `${checkinHtml()}<div class="card">
       <div class="mono dim">Level ${L.L}</div>
       <h1 style="font-size:40px;margin:4px 0 12px">${esc(L.title)}</h1>
       <div class="xpbar"><i style="width:${Math.min(100,L.into/L.need*100)}%"></i></div>
@@ -287,5 +288,5 @@ addEventListener('DOMContentLoaded', () => {
   syncTargets(); D = derive(S); S.seen.L = Math.max(S.seen.L, D.level.L); S.seen.badges = [...new Set([...S.seen.badges, ...D.badges])]
   render()
   setInterval(tick, 500)
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{})
+  if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{})
 })

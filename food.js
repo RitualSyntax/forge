@@ -2,21 +2,21 @@
 
 VIEWS.food = {
   html(){
-    const k = UI.fdate, list = S.diary[k] || [], d = D.day[k] || {kcal:0,p:0,c:0,f:0,fib:0}, tg = S.targets
+    const k = UI.fdate, list = S.diary[k] || [], d = D.day[k] || {kcal:0,p:0,c:0,f:0,fib:0}, tg = dayTargets(S,k)
     const y = addDays(k,-1), ylist = S.diary[y] || []
     return `${datebar(k,'fday')}
     <div class="card">
       <div class="row between"><div><div class="num" style="font-size:34px;font-weight:800;line-height:1">${fmt(d.kcal)}</div><span class="small dim">kcal eaten${tg.kcal?` of ${fmt(tg.kcal)}`:''}</span></div>
       <button class="btn pri" data-a="scan">${IC.scan.replace('<svg','<svg class="icon"')}Scan</button></div>
-      ${macroBars(d)}
-      <p class="small dim" style="margin:6px 0 0">Fibre ${r0(d.fib)}${tg.fib?` / ${tg.fib}`:''} g</p>
+      ${macroBars(d,k)}
+      <p class="small dim" style="margin:6px 0 0">Fibre ${r0(d.fib)}${tg.fib?` / ${tg.fib}`:''} g${S.settings.split && tg.kcal ? ` · <span class="mono" style="color:var(--red)">${S.settings.rest.includes(dow(k)) ? 'Rest day' : 'Training day'}</span>` : ''}</p>
     </div>
     ${MEALS.map(m => {
       const es = list.filter(e => e.meal === m), tot = es.reduce((s,e) => s+e.k, 0)
       const canCopy = !es.length && ylist.some(e => e.meal === m)
       return `<div class="card"><div class="meal-h"><h3>${m}</h3><span class="small dim">${fmt(tot)} kcal</span></div>
         ${es.map(e => `<div class="item" data-a="editEntry" data-id="${e.id}"><div class="grow"><div class="t">${esc(e.name)}</div><div class="s">${kg(e.g)} g · P ${r0(e.p)} · C ${r0(e.c)} · F ${r0(e.f)}</div></div><div class="v">${fmt(e.k)}</div></div>`).join('') || '<div class="empty">Nothing yet</div>'}
-        <div class="row" style="margin-top:8px"><button class="btn sm" data-a="addFood" data-meal="${m}">+ Add</button>${canCopy?`<button class="btn sm ghost" data-a="copyMeal" data-meal="${m}">Copy yesterday's</button>`:''}</div></div>`
+        <div class="row wrap" style="margin-top:8px"><button class="btn sm" data-a="addFood" data-meal="${m}">+ Add</button>${canCopy?`<button class="btn sm ghost" data-a="copyMeal" data-meal="${m}">Copy yesterday's</button>`:''}${es.length > 1 ? `<button class="btn sm ghost" data-a="savePreset" data-meal="${m}">Save as meal</button>`:''}</div></div>`
     }).join('')}
     <div class="card"><h2>Last 7 days</h2>${week7(k)}</div>
     <button class="btn full ghost" data-a="library">Manage food library (${Object.keys(S.foods).length})</button>`
@@ -45,9 +45,9 @@ function foodDate(){ return UI.tab === 'food' ? UI.fdate : today() }
 
 // ---------- add food sheet ----------
 let addCtx = {meal:'Lunch', mode:'lib', q:''}
-A.addFood = el => { addCtx = {meal:(el && el.dataset.meal) || guessMeal(), mode:'lib', q:''}; addSheet() }
+A.addFood = el => { addCtx = {meal:(el && el.dataset.meal) || guessMeal(), mode:S.presets.length ? 'meals' : 'lib', q:''}; addSheet() }
 function addSheet(){
-  const modes = [['lib','Library'],['online','Search online'],['quick','Quick add'],['new','New food']]
+  const modes = [...(S.presets.length ? [['meals','Saved meals']] : []), ['lib','Library'],['online','Search online'],['quick','Quick add'],['new','New food']]
   openSheet(`${sheetHead(`Add to ${addCtx.meal}`)}
     <button class="btn pri full" data-a="scan" data-meal="${addCtx.meal}" style="margin-bottom:10px">${IC.scan.replace('<svg','<svg class="icon"')}Scan a barcode</button>
     <div class="chips" style="margin-bottom:10px">${modes.map(([m,n]) => `<button class="chip ${addCtx.mode===m?'on':''}" data-a="addMode" data-m="${m}">${n}</button>`).join('')}</div>
@@ -58,7 +58,9 @@ A.addMode = el => { addCtx.mode = el.dataset.m; document.querySelectorAll('[data
 
 function addBody(){
   const box = $('#addBody')
-  if (addCtx.mode === 'lib'){
+  if (addCtx.mode === 'meals'){
+    box.innerHTML = S.presets.map(pr => { const t = presetTotals(pr); return `<div class="item" data-a="usePreset" data-id="${pr.id}"><div class="grow"><div class="t">${esc(pr.name)}</div><div class="s">${pr.items.length} items · ${fmt(t.k)} kcal · P ${r0(t.p)} · C ${r0(t.c)} · F ${r0(t.f)}</div></div><button class="x" data-a="delPreset" data-id="${pr.id}" aria-label="Delete meal">×</button></div>` }).join('')
+  } else if (addCtx.mode === 'lib'){
     box.innerHTML = `<input id="fq" type="search" placeholder="Search your foods" value="${esc(addCtx.q)}" autocomplete="off"><div id="flist" style="margin-top:8px"></div>`
     const draw = () => {
       addCtx.q = $('#fq').value
@@ -276,4 +278,40 @@ async function gotCode(code){
   }
   if (f){ f.scanned = true; S.foods[f.id] = f; save(); D = derive(S); amountSheet(f); commit({noRender:true, quiet:true}); render() }
   else { foodSheet(null, code); toast('Not in the database yet. Add it once and it\'s saved for next time.') }
+}
+
+// ---------- saved meals ----------
+// items keep a snapshot, but use the library food if it still exists so edits carry over
+function presetItems(pr){
+  return pr.items.map(it => {
+    const f = it.fid && S.foods[it.fid]
+    if (!f || !it.g) return {...it}
+    const m = it.g/100
+    return {...it, k:r1(f.k*m), p:r1(f.p*m), c:r1(f.c*m), f:r1(f.f*m), fib:r1((f.fib||0)*m)}
+  })
+}
+const presetTotals = pr => presetItems(pr).reduce((a,e) => ({k:a.k+e.k,p:a.p+e.p,c:a.c+e.c,f:a.f+e.f}), {k:0,p:0,c:0,f:0})
+
+A.savePreset = el => {
+  const m = el.dataset.meal, es = (S.diary[UI.fdate]||[]).filter(e => e.meal === m)
+  openSheet(`${sheetHead('Save as meal')}<p class="small dim">${es.map(e => esc(e.name)).join(', ')}</p>
+    <label for="pn">Name</label><input id="pn" placeholder="e.g. Usual breakfast"><button class="btn pri full" id="ps" style="margin-top:14px">Save</button>`)
+  $('#pn').focus()
+  $('#ps').onclick = () => {
+    const name = $('#pn').value.trim(); if (!name) return toast('Name it')
+    S.presets.push({id:uid(), name, items:es.map(e => ({fid:e.fid, name:e.name, g:e.g, k:e.k, p:e.p, c:e.c, f:e.f, fib:e.fib||0}))})
+    closeSheet(); commit({quiet:true}); toast(`Saved <b>${esc(name)}</b>`)
+  }
+}
+A.usePreset = (el, ev) => {
+  if (ev.target.closest('[data-a=delPreset]')) return
+  const pr = S.presets.find(p => p.id === el.dataset.id); if (!pr) return
+  const dk = foodDate()
+  S.diary[dk] = [...(S.diary[dk]||[]), ...presetItems(pr).map(it => ({...it, id:uid(), meal:addCtx.meal}))]
+  closeSheet(); commit()
+}
+A.delPreset = (el, ev) => {
+  ev.stopPropagation()
+  const pr = S.presets.find(p => p.id === el.dataset.id)
+  confirmSheet(`Delete the saved meal <b>${esc(pr.name)}</b>?`, 'Delete', () => { S.presets = S.presets.filter(p => p !== pr); commit({quiet:true}) })
 }

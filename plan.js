@@ -28,6 +28,12 @@ VIEWS.plan = {
       ${g.per ? `<label for="p_rate">Pace: <b id="rateLbl">${r1(rate)}% of bodyweight per ${g.per==='wk'?'week':'month'}</b></label>
         <input id="p_rate" type="range" min="${g.min}" max="${g.max}" step="0.05" value="${rate}" style="padding:0">
         <div class="row between small dim"><span>Slower, leaner</span><button class="btn sm ghost" data-a="rateReset">Reset to suggested</button><span>Faster</span></div>` : ''}
+      <label for="p_adj">Check-in adjustment, kcal a day</label><input id="p_adj" data-p="adj" value="${p.adj||0}">
+    </div>
+    <div class="card"><h2>Training vs rest days</h2>
+      <p class="small dim">Eat more on lifting days and less on rest days. The weekly total stays the same and only carbs move. Rest days come from the setting below.</p>
+      <div class="chips">${[[0,'Same every day'],[150,'+150'],[250,'+250'],[350,'+350']].map(([v,n]) => `<button class="chip ${(+st.split||0)===v?'on':''}" data-a="setSplit" data-v="${v}">${n}</button>`).join('')}</div>
+      <div id="splitOut"></div>
     </div>
     <div class="card"><h2>Daily rings</h2>
       <div class="grid3"><div><label for="s_stepGoal">Step goal</label><input id="s_stepGoal" data-s="stepGoal" inputmode="numeric" value="${st.stepGoal}"></div>
@@ -37,14 +43,15 @@ VIEWS.plan = {
       <label>Rest days (Strength ring closes itself)</label>
       <div class="chips">${[1,2,3,4,5,6,0].map(d => `<button class="chip ${st.rest.includes(d)?'on':''}" data-a="restDay" data-d="${d}">${DAYS[d]}</button>`).join('')}</div>
     </div>
+    ${healthCard()}
     <div class="card"><h2>Your data</h2>
-      <p class="small dim">Everything lives on this phone. Export a backup now and then so you don't lose it if you clear Chrome's data.</p>
+      <p class="small dim">Everything lives on this phone. Export a backup now and then so you don't lose it if you clear the browser's data. Photos aren't in the backup.</p>
       <div class="grid2"><button class="btn" data-a="exportData">Export backup</button><button class="btn" data-a="importData">Import backup</button></div>
       <input type="file" id="impFile" accept="application/json,.json" hidden>
       <button class="btn full ghost danger" data-a="resetAll" style="margin-top:10px">Reset everything</button>
     </div>`
   },
-  after(){ planOut(); adaptOut()
+  after(){ planOut(); adaptOut(); splitOut()
     document.querySelectorAll('[data-p]').forEach(i => i.oninput = () => { const k = i.dataset.p; S.profile[k] = i.value === '' ? '' : num(i.value); liveSave() })
     document.querySelectorAll('[data-s]').forEach(i => i.oninput = () => { const v = Math.round(num(i.value)); if (v > 0){ S.settings[i.dataset.s] = v; liveSave() } })
     const rr = $('#p_rate'); if (rr) rr.oninput = () => { S.profile.rate = +rr.value; $('#rateLbl').textContent = `${r1(+rr.value)}% of bodyweight per ${GOALS[S.profile.goal].per==='wk'?'week':'month'}`; liveSave() }
@@ -55,7 +62,7 @@ VIEWS.plan = {
 // typing in the form - save + update numbers without nuking focus
 let liveT = 0
 function liveSave(){
-  syncTargets(); planOut()
+  syncTargets(); planOut(); splitOut()
   clearTimeout(liveT); liveT = setTimeout(() => commit({noRender:true, quiet:true}), 600)
 }
 
@@ -70,6 +77,7 @@ function planOut(){
       <div class="stat" style="box-shadow:inset 0 -3px var(--pro)"><div class="num">${pl.prot}g</div><small>protein</small></div>
       <div class="stat" style="box-shadow:inset 0 -3px var(--car)"><div class="num">${pl.carb}g</div><small>carbs</small></div>
       <div class="stat" style="box-shadow:inset 0 -3px var(--cal)"><div class="num">${pl.fat}g</div><small>fat</small></div></div>
+    ${+p.adj ? `<p class="small dim" style="margin:10px 0 0">Includes ${p.adj>0?'+':''}${p.adj} kcal from check-ins.</p>` : ''}
     ${g.per ? `<p style="margin:12px 0 0"><b>${pl.gWk>=0?'+':''}${r0(pl.gWk)} g a week</b> <span class="dim">→ about ${r1(+p.weight + pl.gWk/1000*12)} kg in 12 weeks</span></p>` : ''}
     <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;min-height:32px">How this is worked out</summary><div class="why"><ul>${planWhy(p,pl).map(l => `<li>${l}</li>`).join('')}</ul></div></details>
     <p class="small faint" style="margin:8px 0 0">Formulas are a starting point. After a few weeks of logging, Forge measures your real maintenance below.</p>`
@@ -110,6 +118,7 @@ A.restDay = el => {
 
 // backup
 A.exportData = () => {
+  if (NATIVE) return nativeExport(JSON.stringify(S), `forge-backup-${today()}.json`).catch(() => toast('Couldn\'t share the backup'))
   const blob = new Blob([JSON.stringify(S)], {type:'application/json'})
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `forge-backup-${today()}.json`
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000)
@@ -129,3 +138,15 @@ function importFile(e){
 A.resetAll = () => confirmSheet('This wipes every workout, food, weigh-in and level. Export a backup first if you might want it.', 'Wipe it all', () => {
   S = fresh(); window.S = S; D = derive(S); commit({quiet:true})
 })
+
+function splitOut(){
+  const box = $('#splitOut'); if (!box) return
+  const st = S.settings
+  if (!+st.split || !S.targets.kcal){ box.innerHTML = ''; return }
+  if (!st.rest.length){ box.innerHTML = '<p class="small" style="color:var(--str);margin:10px 0 0">Pick at least one rest day below for this to work.</p>'; return }
+  const rd = S.settings.rest[0], rk = addDays(today(), ((rd - dow(today())) + 7) % 7)
+  const trainK = [0,1,2,3,4,5,6].map(i => addDays(today(),i)).find(k => !st.rest.includes(dow(k)))
+  const a = dayTargets(S, trainK || today()), b = dayTargets(S, rk)
+  box.innerHTML = `<div class="grid2" style="margin-top:12px"><div class="stat"><div class="num">${fmt(a.kcal)}</div><small>training day · ${a.carb}g carbs</small></div><div class="stat"><div class="num">${fmt(b.kcal)}</div><small>rest day · ${b.carb}g carbs</small></div></div>`
+}
+A.setSplit = el => { S.settings.split = +el.dataset.v; commit({quiet:true}) }

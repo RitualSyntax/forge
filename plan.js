@@ -17,13 +17,13 @@ VIEWS.plan = {
     </div>
     <div class="card"><h2>Your week</h2>
       <label>Day-to-day, outside the gym</label>
-      <div style="display:grid;gap:6px">${Object.entries(NEAT).map(([k,n]) => `<button class="chip ${p.neat===k?'on':''}" data-a="pset" data-k="neat" data-v="${k}" style="text-align:left;min-height:52px;border-radius:14px;padding:8px 14px"><span style="display:block">${n.name}</span><span class="small" style="font-weight:400;opacity:.75">${n.hint}</span></button>`).join('')}</div>
+      <div style="display:grid;gap:6px">${Object.entries(NEAT).map(([k,n]) => `<button class="chip ${p.neat===k?'on':''}" data-a="pset" data-k="neat" data-v="${k}" style="text-align:left;min-height:52px;padding:8px 14px"><span style="display:block">${n.name}</span><span class="small" style="font-weight:400;opacity:.75">${n.hint}</span></button>`).join('')}</div>
       <div class="grid3"><div><label for="p_days">Lifts / week</label><input id="p_days" data-p="days" inputmode="numeric" value="${p.days}"></div>
       <div><label for="p_mins">Mins / session</label><input id="p_mins" data-p="mins" inputmode="numeric" value="${p.mins}"></div>
       <div><label for="p_cardio">Cardio min/wk</label><input id="p_cardio" data-p="cardio" inputmode="numeric" value="${p.cardio}"></div></div>
     </div>
     <div class="card"><h2>Goal</h2>
-      <div style="display:grid;gap:6px">${Object.entries(GOALS).map(([k,o]) => `<button class="chip ${p.goal===k?'on':''}" data-a="pset" data-k="goal" data-v="${k}" style="text-align:left;min-height:52px;border-radius:14px;padding:8px 14px"><span style="display:block">${o.name}</span><span class="small" style="font-weight:400;opacity:.75">${o.sub}</span></button>`).join('')}</div>
+      <div style="display:grid;gap:6px">${Object.entries(GOALS).map(([k,o]) => `<button class="chip ${p.goal===k?'on':''}" data-a="pset" data-k="goal" data-v="${k}" style="text-align:left;min-height:52px;padding:8px 14px"><span style="display:block">${o.name}</span><span class="small" style="font-weight:400;opacity:.75">${o.sub}</span></button>`).join('')}</div>
       <label>Training experience</label><div class="chips">${Object.entries(EXP).map(([k,n]) => chip('exp',k,n)).join('')}</div>
       ${g.per ? `<label for="p_rate">Pace: <b id="rateLbl">${r1(rate)}% of bodyweight per ${g.per==='wk'?'week':'month'}</b></label>
         <input id="p_rate" type="range" min="${g.min}" max="${g.max}" step="0.05" value="${rate}" style="padding:0">

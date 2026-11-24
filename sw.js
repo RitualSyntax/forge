@@ -1,7 +1,7 @@
 // offline cache - bump V when files change
-const V = 'forge-1'
+const V = 'forge-2'
 const FILES = ['./','index.html','styles.css','data.js','calc.js','app.js','food.js','train.js','body.js','plan.js',
-  'manifest.webmanifest','fonts/archivo.woff2','fonts/inter.woff2','icons/icon-192.png','icons/icon-512.png']
+  'manifest.webmanifest','fonts/redaction50.woff2','fonts/spectral.woff2','fonts/spectral-600.woff2','fonts/plexmono.woff2','fonts/plexmono-600.woff2','icons/icon-192.png','icons/icon-512.png']
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(FILES)).then(() => self.skipWaiting()))

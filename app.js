@@ -28,7 +28,7 @@ function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)) } catch(e){ 
 let S = load()
 window.S = S
 let D = derive(S)
-const UI = {tab:'today', fdate:today(), wrange:30, timerEnd:0}
+const UI = {tab:'home', fdate:today(), wrange:30, timerEnd:0}
 
 // helpers
 const $ = s => document.querySelector(s)
@@ -88,9 +88,11 @@ function xpPing(n){
 
 // ---------- tabs ----------
 const VIEWS = {}
-const TITLES_TAB = {today:'Today',food:'Food',train:'Train',body:'Body',plan:'Plan'}
+const PAGES = ['level','home','food','train','body','plan']
+const TITLES_TAB = {level:'Level',home:'Home',food:'Food',train:'Train',body:'Body',plan:'Plan'}
 function render(){
   $('#title').textContent = TITLES_TAB[UI.tab]
+  $('#top').classList.toggle('hide', UI.tab === 'home')
   $('#lvlNum').textContent = D.level.L
   $('#lvlName').textContent = D.level.title
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === UI.tab))
@@ -99,7 +101,30 @@ function render(){
   v.after && v.after()
   renderTimer()
 }
-function go(tab){ UI.tab = tab; render(); scrollTo(0,0) }
+function go(tab){
+  const dir = PAGES.indexOf(tab) - PAGES.indexOf(UI.tab)
+  UI.tab = tab; render(); scrollTo(0,0)
+  const v = $('#view'); v.classList.remove('in-l','in-r'); void v.offsetWidth
+  if (dir) v.classList.add(dir > 0 ? 'in-l' : 'in-r')
+}
+
+// swipe left/right between pages
+let sw0 = null
+addEventListener('touchstart', e => {
+  if (sheetOpen || e.touches.length > 1 || e.target.closest('input[type=range],.scan,.chart,.noswipe')) { sw0 = null; return }
+  sw0 = {x:e.touches[0].clientX, y:e.touches[0].clientY, t:Date.now()}
+}, {passive:true})
+addEventListener('touchend', e => {
+  if (!sw0) return
+  const t = e.changedTouches[0], dx = t.clientX - sw0.x, dy = t.clientY - sw0.y
+  const ok = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)*1.6 && Date.now() - sw0.t < 700
+  sw0 = null
+  if (!ok) return
+  const i = PAGES.indexOf(UI.tab) + (dx < 0 ? 1 : -1)
+  if (i < 0 || i >= PAGES.length) return
+  if (!S.seen.swiped){ S.seen.swiped = 1; save() }
+  go(PAGES[i])
+}, {passive:true})
 
 // ---------- sheets ----------
 let sheetClose = null, sheetOpen = false
@@ -139,7 +164,8 @@ document.addEventListener('click', e => {
   if (tab) go(tab.dataset.tab)
 })
 $('#scrim').onclick = () => closeSheet()
-$('#lvlBtn').onclick = () => A.rewards()
+$('#lvlBtn').onclick = () => go('level')
+A.rewards = () => go('level')
 
 // ---------- icons ----------
 const IC = {
@@ -154,71 +180,55 @@ const IC = {
 const datebar = (k, act) => `<div class="datebar"><button class="btn" data-a="${act}" data-d="-1" aria-label="Previous day">${IC.left}</button><div class="grow">${niceDate(k)}</div><button class="btn" data-a="${act}" data-d="1" aria-label="Next day" ${k >= today() ? 'disabled' : ''}>${IC.right}</button></div>`
 
 // ---------- rings ----------
-const RING_COL = {cal:'var(--cal)',pro:'var(--pro)',str:'var(--str)',car:'var(--car)'}
+const RING_COL = {cal:'#ff1a1a',pro:'#f2f2f2',str:'#ff6b2b',car:'#8a8a8a'}
+const RING_NAME = {cal:'Fuel',pro:'Protein',str:'Strength',car:'Cardio'}
 function ringsSvg(R){
-  const order = ['cal','pro','str','car'], sw = 17
-  let out = '<svg class="rings" viewBox="0 0 200 200" role="img" aria-label="Daily rings">'
+  const order = ['cal','pro','str','car'], sw = 16
+  let out = '<svg class="rings" viewBox="0 0 200 200" role="img" aria-label="Daily rings"><defs><filter id="gl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
   order.forEach((k,i) => {
-    const r = 90 - i*(sw+3), C = 2*Math.PI*r, v = Math.max(0, Math.min(R[k].v, 1))
-    out += `<circle cx="100" cy="100" r="${r}" stroke="${RING_COL[k]}" stroke-width="${sw}" opacity=".16"/>`
-    out += `<circle class="arc" cx="100" cy="100" r="${r}" stroke="${RING_COL[k]}" stroke-width="${sw}" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C*(1-v)}" transform="rotate(-90 100 100)" ${v <= 0 ? 'opacity="0"' : ''}/>`
+    const r = 90 - i*(sw+4), C = 2*Math.PI*r, v = Math.max(0, Math.min(R[k].v, 1))
+    out += `<circle cx="100" cy="100" r="${r}" stroke="${RING_COL[k]}" stroke-width="${sw}" opacity=".13"/>`
+    out += `<circle class="arc" cx="100" cy="100" r="${r}" stroke="${RING_COL[k]}" stroke-width="${sw}" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C*(1-v)}" transform="rotate(-90 100 100)" filter="url(#gl)" ${v <= 0 ? 'opacity="0"' : ''}/>`
   })
+  // sigil in the middle
+  out += `<g stroke="#ff1a1a" stroke-width="1.2" fill="none" opacity=".85" filter="url(#gl)"><circle cx="100" cy="100" r="11"/><path d="M90.5 95.5h19L100 112z"/><path d="M100 86v28"/></g><circle cx="100" cy="100" r="1.6" fill="#ff1a1a"/>`
   return out + '</svg>'
 }
 function animateRings(){
   requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('.rings .arc').forEach(a => a.style.strokeDashoffset = a.dataset.off)))
 }
 
-// ---------- today ----------
-VIEWS.today = {
+// ---------- home - rings + kcal left, nothing else ----------
+VIEWS.home = {
   html(){
-    const t = today(), R = ringsFor(S,D,t), tg = S.targets, d = D.day[t] || {kcal:0,p:0,c:0,f:0}
-    const L = D.level
-    const noPlan = !tg.kcal
-    const calTxt = noPlan ? 'Set your plan' : R.cal.over ? `${fmt(R.cal.now)} kcal · over by ${fmt(R.cal.now - tg.kcal)}` : `${fmt(R.cal.now)} / ${fmt(tg.kcal)} kcal`
-    const steps = R.car.steps
-    const quests = [
-      {k:'cal',name:'Land in your calorie zone',xp:30,done:R.cal.closed,a:'addFood'},
-      {k:'pro',name:`Hit ${tg.prot || '—'} g protein`,xp:30,done:R.pro.closed,a:'addFood'},
-      R.str.rest ? {name:'Rest day. Recover and eat well',xp:0,done:true}
-        : {k:'str',name:`Log ${S.settings.setGoal} working sets`,xp:40,done:R.str.closed,a:'train'},
-      {k:'car',name:`${fmt(S.settings.stepGoal)} steps or ${S.settings.cardioGoal} min cardio`,xp:25,done:R.car.closed,a:'activity'},
-      {name:'Weigh in',xp:15,done:!!S.weights[t],a:'logWeight'}
-    ]
+    const t = today(), R = ringsFor(S,D,t), tg = S.targets, d = D.day[t] || {kcal:0}
+    const left = tg.kcal - d.kcal
+    const dateTxt = toDate(t).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})
     const allDone = R.cal.closed && R.pro.closed && R.str.closed && R.car.closed
-    return `
-    ${noPlan ? `<div class="card" style="border-color:var(--acc)"><h3>Start with your plan</h3><p class="dim small" style="margin:6px 0 12px">Two minutes of info and Forge works out your calories and macros for building muscle.</p><button class="btn pri full" data-a="tab" data-v="plan">Set up my plan</button></div>` : ''}
-    <div class="card"><div class="rings-wrap">${ringsSvg(R)}
-      <div class="legend">
-        <div class="leg ${R.cal.closed?'done':''}"><i style="background:var(--cal)"></i><div><b>Fuel</b><span>${calTxt}</span></div></div>
-        <div class="leg ${R.pro.closed?'done':''}"><i style="background:var(--pro)"></i><div><b>Protein</b><span>${r0(R.pro.now)} / ${tg.prot || '—'} g</span></div></div>
-        <div class="leg ${R.str.closed?'done':''}"><i style="background:var(--str)"></i><div><b>Strength</b><span>${R.str.rest ? 'Rest day' : `${R.str.now} / ${R.str.goal} sets`}</span></div></div>
-        <div class="leg ${R.car.closed?'done':''}"><i style="background:var(--car)"></i><div><b>Cardio</b><span>${fmt(steps)} steps${R.car.cmins ? ` · ${R.car.cmins} min` : ''}</span></div></div>
-      </div></div>
-      ${allDone ? '<p style="margin:12px 0 0;font-weight:700;color:var(--good)">Every ring closed. Perfect day, +50 XP</p>' : ''}
-    </div>
-    <div class="quick">
-      <button data-a="scan">${IC.scan}Scan</button>
-      <button data-a="addFood">${IC.plus}Food</button>
-      <button data-a="train">${IC.lift}${S.active ? 'Workout' : 'Train'}</button>
-      <button data-a="logWeight">${IC.scale}Weigh</button>
-    </div>
-    <div class="card">
-      <div class="row between"><h3>Level ${L.L} · ${esc(L.title)}</h3><span class="small dim nowrap">${fmt(L.into)} / ${fmt(L.need)} XP</span></div>
-      <div class="xpbar" style="margin:10px 0 12px"><i style="width:${Math.min(100,L.into/L.need*100)}%"></i></div>
-      <div class="grid3">
-        <div class="stat"><div class="num">${D.streak}</div><small>day streak</small></div>
-        <div class="stat"><div class="num">${D.perfectDays}</div><small>perfect days</small></div>
-        <div class="stat"><div class="num">${D.badges.length}/${BADGES.length}</div><small>badges</small></div>
-      </div>
-    </div>
-    <div class="card"><h2>Daily quests</h2>
-      ${quests.map(q => `<div class="quest ${q.done?'done':''}" ${q.a&&!q.done?`data-a="${q.a}" style="cursor:pointer"`:''}><span class="tick"></span><span class="grow">${q.name}</span><span class="xp">${q.xp?`+${q.xp} XP`:''}</span></div>`).join('')}
-      <div class="quest"><span class="tick" style="border-style:dashed"></span><span class="grow dim">Close every ring for a perfect day</span><span class="xp">+50 XP</span></div>
-    </div>
-    ${tg.kcal ? `<div class="card"><div class="row between"><h3>Left today</h3><span class="num" style="font-size:22px;font-weight:800">${fmt(Math.max(0,tg.kcal-d.kcal))} kcal</span></div>${macroBars(d)}</div>` : ''}`
+    return `<div class="home">
+      <div class="mono date">${dateTxt}</div>
+      <button class="ringbtn" data-a="ringInfo" aria-label="Ring details">${ringsSvg(R)}</button>
+      ${tg.kcal ? `<div><div class="left-n ${left < 0 ? 'over' : ''}">${fmt(Math.abs(left))}</div>
+        <div class="mono dim" style="margin-top:8px">${left < 0 ? 'kcal over today' : 'kcal left today'}</div></div>`
+      : `<div><p class="dim">No plan yet. The rings need numbers.</p><button class="btn pri" data-a="tab" data-v="plan">Set my plan</button></div>`}
+      ${allDone ? '<div class="mono" style="color:var(--red);text-shadow:var(--glow)">All rings closed. It noticed.</div>'
+        : !S.seen.swiped ? '<div class="mono hint">‹ swipe ›</div>' : ''}
+    </div>`
   },
   after: animateRings
+}
+
+A.ringInfo = () => {
+  const t = today(), R = ringsFor(S,D,t), tg = S.targets, st = S.settings
+  const row = (k, txt) => `<div class="leg ${R[k].closed?'done':''}"><i style="background:${RING_COL[k]};color:${RING_COL[k]}"></i><div><b style="color:${RING_COL[k]}">${RING_NAME[k]}</b><span>${txt}</span></div></div>`
+  openSheet(`${sheetHead('Today')}
+    <div class="legend">
+      ${row('cal', tg.kcal ? `${fmt(R.cal.now)} of ${fmt(tg.kcal)} kcal. Closes when you land within 10% of target.` : 'Set your plan first.')}
+      ${row('pro', `${r0(R.pro.now)} of ${tg.prot || '—'} g protein.`)}
+      ${row('str', R.str.rest ? 'Rest day. It closes itself.' : `${R.str.now} of ${R.str.goal} working sets.`)}
+      ${row('car', `${fmt(R.car.steps)} of ${fmt(st.stepGoal)} steps${R.car.cmins ? `, ${R.car.cmins} min cardio` : ''}. Either one closes it.`)}
+    </div>
+    <div class="grid2" style="margin-top:18px"><button class="btn pri" data-a="scan">Scan food</button><button class="btn" data-a="activity">Add steps</button></div>`)
 }
 
 function macroBars(d){
@@ -237,18 +247,38 @@ A.activity = () => {
   $('#svA').onclick = () => { S.activity[t] = {steps:r0(num($('#st').value)), active:r0(num($('#ak').value))}; closeSheet(); commit() }
 }
 
-A.rewards = () => {
-  const L = D.level
-  openSheet(`${sheetHead(`Level ${L.L}`)}
-    <p style="font:800 22px Archivo,sans-serif;margin:0 0 6px">${esc(L.title)}</p>
-    <div class="xpbar"><i style="width:${L.into/L.need*100}%"></i></div>
-    <p class="small dim" style="margin-top:6px">${fmt(L.need-L.into)} XP to level ${L.L+1} · ${fmt(D.xp)} XP total</p>
-    <h3 style="margin:16px 0 8px">Badges</h3>
-    <div class="ach">${BADGES.map(b => `<div class="badge ${D.badges.includes(b.id)?'on':''}" style="color:${D.badges.includes(b.id)?'var(--cal)':'var(--faint)'}">${IC.medal}<b style="color:var(--ink)">${esc(b.name)}</b><span class="dim">${esc(b.desc)}</span></div>`).join('')}</div>
-    <h3 style="margin:16px 0 8px">How to earn XP</h3>
-    <div class="why small"><ul>
+// ---------- level - xp, quests, badges ----------
+VIEWS.level = {
+  html(){
+    const t = today(), R = ringsFor(S,D,t), tg = S.targets, L = D.level
+    const quests = [
+      {name:'Land in your calorie zone',xp:30,done:R.cal.closed,a:'addFood'},
+      {name:`Hit ${tg.prot || '—'} g protein`,xp:30,done:R.pro.closed,a:'addFood'},
+      R.str.rest ? {name:'Rest day. Recover and eat well',xp:0,done:true}
+        : {name:`Log ${S.settings.setGoal} working sets`,xp:40,done:R.str.closed,a:'train'},
+      {name:`${fmt(S.settings.stepGoal)} steps or ${S.settings.cardioGoal} min cardio`,xp:25,done:R.car.closed,a:'activity'},
+      {name:'Weigh in',xp:15,done:!!S.weights[t],a:'logWeight'}
+    ]
+    return `<div class="card">
+      <div class="mono dim">Level ${L.L}</div>
+      <h1 style="font-size:40px;margin:4px 0 12px">${esc(L.title)}</h1>
+      <div class="xpbar"><i style="width:${Math.min(100,L.into/L.need*100)}%"></i></div>
+      <p class="mono dim" style="margin:8px 0 14px">${fmt(L.into)} / ${fmt(L.need)} XP · ${fmt(D.xp)} total</p>
+      <div class="grid3">
+        <div class="stat"><div class="num">${D.streak}</div><small>day streak</small></div>
+        <div class="stat"><div class="num">${D.perfectDays}</div><small>perfect days</small></div>
+        <div class="stat"><div class="num">${D.badges.length}/${BADGES.length}</div><small>badges</small></div>
+      </div></div>
+    <div class="card"><h2>Daily quests</h2>
+      ${quests.map(q => `<div class="quest ${q.done?'done':''}" ${q.a&&!q.done?`data-a="${q.a}" style="cursor:pointer"`:''}><span class="tick"></span><span class="grow">${q.name}</span><span class="xp">${q.xp?`+${q.xp} XP`:''}</span></div>`).join('')}
+      <div class="quest"><span class="tick" style="border-style:dashed"></span><span class="grow dim">Close every ring for a perfect day</span><span class="xp">+50 XP</span></div>
+    </div>
+    <div class="card"><h2>Badges</h2>
+      <div class="ach">${BADGES.map(b => { const on = D.badges.includes(b.id); return `<div class="badge ${on?'on':''}" style="color:${on?'var(--red)':'var(--faint)'}">${IC.medal}<b style="color:${on?'var(--red)':'var(--ink)'}">${on ? esc(b.name) : '???'}</b><span class="dim">${esc(b.desc)}</span></div>` }).join('')}</div></div>
+    <div class="card"><h2>How XP works</h2><div class="why small"><ul>
       <li>Food logged: 5 XP each, up to 40 a day</li><li>Fuel or protein ring: 30 each · Strength ring: 40 · Cardio ring: 25</li>
-      <li>Weigh-in: 15 · Every set: 2 · Finished workout: 30 · New PB: 25</li><li>Perfect day (all four rings): 50 bonus</li></ul></div>`)
+      <li>Weigh-in: 15 · Every set: 2 · Finished workout: 30 · New PB: 25</li><li>Perfect day, all four rings: 50 bonus</li></ul></div></div>`
+  }
 }
 
 // ---------- boot ----------

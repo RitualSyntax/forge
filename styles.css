@@ -22,8 +22,6 @@
 *{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#000}
 body{color:var(--ink);font:17px/1.5 var(--serif);overflow-x:clip;font-variant-numeric:tabular-nums}
-/* scanlines - dark lines only so black stays black */
-body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:40;background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
 button,input,select,textarea{font:inherit;color:inherit}
 h1,h2{font-family:var(--title);font-weight:400;color:var(--red);text-shadow:var(--glow);letter-spacing:.01em}
 h1{font-size:30px;line-height:1.05;margin:0}

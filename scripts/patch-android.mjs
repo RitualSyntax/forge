@@ -42,6 +42,15 @@ const widget = `
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/forge_widget_info" />
         </receiver>
 `
+// forge://log?d=... so grimoire can send meals in
+const deep = `
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="forge" />
+            </intent-filter>`
+if (!m.includes('android:scheme="forge"')) m = m.replace(/(<category android:name="android\.intent\.category\.LAUNCHER" \/>\s*<\/intent-filter>)/, '$1' + deep)
 if (!m.includes('PermissionsRationaleActivity')) m = m.replace('</application>', acts + '    </application>')
 if (!m.includes('ForgeWidget')) m = m.replace('</application>', widget + '    </application>')
 writeFileSync(mf, m)

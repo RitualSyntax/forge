@@ -1,6 +1,6 @@
 // offline cache - bump V when files change
-const V = 'forge-5'
-const FILES = ['./','index.html','styles.css','data.js','calc.js','app.js','food.js','train.js','body.js','plan.js','checkin.js','photos.js','health.js',
+const V = 'forge-6'
+const FILES = ['./','index.html','styles.css','data.js','calc.js','app.js','food.js','train.js','body.js','plan.js','checkin.js','photos.js','health.js','inbox.js',
   'manifest.webmanifest','fonts/redaction50.woff2','fonts/spectral.woff2','fonts/spectral-600.woff2','fonts/plexmono.woff2','fonts/plexmono-600.woff2','icons/icon-192.png','icons/icon-512.png']
 
 self.addEventListener('install', e => {
